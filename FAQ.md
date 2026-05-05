@@ -4,8 +4,8 @@
 
 There are several common reasons for driver installation issues:
 
-1. **Incompatible Kernel Version**
-   Linuwu Sense drivers require **Linux kernel 6.13 or later**. If you're running an older kernel, the installation will fail. Please update your kernel before proceeding.
+1. **Missing Kernel Headers or an Untested Kernel**
+   DAMX validates the installer-applied Linuwu Sense compatibility patch on **Linux kernel 6.1 and newer**. Make sure the matching kernel headers for your running kernel are installed before building the driver.
 
 2. **Secure Boot is Enabled**
    Secure Boot prevents unsigned kernel modules from loading. This can cause errors like:
