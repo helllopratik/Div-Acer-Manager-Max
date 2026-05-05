@@ -250,40 +250,73 @@ def replace_once(old, new, description):
     text = text.replace(old, new, 1)
     changed = True
 
+def re_replace_once(pattern, replacement, description):
+    global text, changed
+    new_text, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+    if count == 0:
+        raise SystemExit(f"Could not patch Linuwu-Sense source: {description}")
+    text = new_text
+    changed = True
+
 if "#include <linux/version.h>" not in text:
-    replace_once("#include <linux/kernel.h>\n",
-                 "#include <linux/kernel.h>\n#include <linux/version.h>\n",
-                 "linux/version.h include")
+    re_replace_once(r'^(\s*)#include <linux/kernel\.h>',
+                    r'\1#include <linux/kernel.h>\n\1#include <linux/version.h>',
+                    "linux/version.h include")
 
 if "#include <linux/err.h>" not in text:
-    replace_once("#include <linux/bitmap.h>\n",
-                 "#include <linux/bitmap.h>\n#include <linux/err.h>\n",
-                 "linux/err.h include")
+    re_replace_once(r'^(\s*)#include <linux/bitmap\.h>',
+                    r'\1#include <linux/bitmap.h>\n\1#include <linux/err.h>',
+                    "linux/err.h include")
 
 if "#include <linux/unaligned.h>" in text and "#include <asm/unaligned.h>" not in text:
-    replace_once("#include <linux/unaligned.h>\n",
-                 "#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)\n"
-                 "#include <asm/unaligned.h>\n"
-                 "#else\n"
-                 "#include <linux/unaligned.h>\n"
-                 "#endif\n",
-                 "unaligned include compatibility")
+    re_replace_once(r'^(\s*)#include <linux/unaligned\.h>',
+                    r'#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)\n'
+                    r'\1#include <asm/unaligned.h>\n'
+                    r'#else\n'
+                    r'\1#include <linux/unaligned.h>\n'
+                    r'#endif',
+                    "unaligned include compatibility")
 
 if "DAMX_BACKLIGHT_POWER_COMPAT" not in text:
-    replace_once("#include <linux/err.h>\n",
-                 "#include <linux/err.h>\n\n"
-                 "#ifndef BACKLIGHT_POWER_ON\n"
-                 "#define DAMX_BACKLIGHT_POWER_COMPAT\n"
-                 "#define BACKLIGHT_POWER_ON FB_BLANK_UNBLANK\n"
-                 "#endif\n",
-                 "backlight power compatibility")
+    re_replace_once(r'^(\s*)#include <linux/err\.h>',
+                    r'\1#include <linux/err.h>\n\n'
+                    r'#ifndef BACKLIGHT_POWER_ON\n'
+                    r'#define DAMX_BACKLIGHT_POWER_COMPAT\n'
+                    r'#define BACKLIGHT_POWER_ON FB_BLANK_UNBLANK\n'
+                    r'#endif',
+                    "backlight power compatibility")
 
 if "DAMX kernel compatibility layer" not in text:
     compat = r'''
-/* DAMX kernel compatibility layer for platform_profile API changes.
- * Linux 6.14+ uses struct platform_profile_ops and devm registration.
- * Linux 6.13 and older use struct platform_profile_handler.
+/* DAMX kernel compatibility layer for platform_profile and WMI changes.
+ * platform_profile: Linux 6.14+ uses struct platform_profile_ops and devm registration.
+ * WMI: Linux 6.12+ removed legacy wmi_install_notify_handler.
  */
+#if LINUX_VERSION_CODE >= 61200
+#include <linux/wmi.h>
+static void acer_wmi_notify(union acpi_object *obj, void *context);
+static void damx_wmi_notify(struct wmi_device *wdev, union acpi_object *data) {
+    acer_wmi_notify(data, NULL);
+}
+static const struct wmi_device_id damx_wmi_id_table[] = {
+    { "676AA15E-6A47-4D9F-A2CC-1E6D18D14026", NULL },
+    { }
+};
+static struct wmi_driver damx_wmi_driver = {
+    .driver = { .name = "damx-wmi-event", },
+    .id_table = damx_wmi_id_table,
+    .notify = damx_wmi_notify,
+};
+static inline acpi_status damx_wmi_install_notify_handler(const char *guid, void *handler, void *data) {
+    return wmi_driver_register(&damx_wmi_driver) ? AE_ERROR : AE_OK;
+}
+static inline void damx_wmi_remove_notify_handler(const char *guid) {
+    wmi_driver_unregister(&damx_wmi_driver);
+}
+#define wmi_install_notify_handler(guid, handler, data) damx_wmi_install_notify_handler(guid, handler, data)
+#define wmi_remove_notify_handler(guid) damx_wmi_remove_notify_handler(guid)
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 struct platform_profile_ops {
     int (*probe)(void *drvdata, unsigned long *choices);
@@ -357,21 +390,13 @@ static void damx_platform_profile_remove_compat(void)
 static inline void damx_platform_profile_remove_compat(void) {}
 #endif
 '''
-    text, count = re.subn(
-        r"(static struct device \*platform_profile_device;\s*static bool platform_profile_support;\s*)",
-        r"\1\n" + compat + "\n",
-        text,
-        count=1,
-    )
-    if count != 1:
-        raise SystemExit("Could not patch Linuwu-Sense source: platform_profile compatibility")
-    changed = True
+    re_replace_once(r'(static struct device \*platform_profile_device;\s*static bool platform_profile_support;\s*)',
+                    r'\1\n' + compat + '\n',
+                    "platform_profile compatibility")
 
 if "#define acer_wmi_notify_handler" not in text:
-    needle = "     }\n }\n \n static acpi_status __init\n wmid3_set_function_mode"
-    wrapper = '''     }
- }
-
+    needle = r'^\s*static acpi_status __init\n\s*wmid3_set_function_mode'
+    wrapper = '''
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 static void acer_wmi_notify_event(u32 value, void *context)
 {
@@ -392,63 +417,48 @@ static void acer_wmi_notify_event(u32 value, void *context)
 #define acer_wmi_notify_handler acer_wmi_notify
 #endif
 
- static acpi_status __init
- wmid3_set_function_mode'''
-    replace_once(needle, wrapper, "WMI notify compatibility")
+'''
+    re_replace_once(needle, wrapper + r'\g<0>', "WMI notify compatibility")
 
 if "acer_wmi_notify_handler" in text:
-    new_text = text.replace("                         acer_wmi_notify, NULL);",
-                            "                         acer_wmi_notify_handler, NULL);")
-    if new_text != text:
-        text = new_text
-        changed = True
+    text = text.replace("acer_wmi_notify, NULL);", "acer_wmi_notify_handler, NULL);")
+    changed = True
 
 if "#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)\n static const struct hwmon_channel_info *acer_wmi_hwmon_info[]" not in text:
-    old = " static const struct hwmon_channel_info *const acer_wmi_hwmon_info[] = {"
-    if old in text:
-        text = text.replace(
-            old,
-            " #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)\n"
-            " static const struct hwmon_channel_info *acer_wmi_hwmon_info[] = {\n"
-            " #else\n"
-            " static const struct hwmon_channel_info *const acer_wmi_hwmon_info[] = {\n"
-            " #endif",
-            1,
-        )
-        changed = True
+    re_replace_once(r'^(\s*)static const struct hwmon_channel_info \*const acer_wmi_hwmon_info\[\] = \{',
+                    r'\1#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)\n'
+                    r'\1static const struct hwmon_channel_info *acer_wmi_hwmon_info[] = {\n'
+                    r'#else\n'
+                    r'\1static const struct hwmon_channel_info *const acer_wmi_hwmon_info[] = {\n'
+                    r'#endif',
+                    "hwmon channel info compatibility")
 
 if "static int acer_platform_remove(struct platform_device *device)" not in text:
-    text, count = re.subn(
-        r"(?m)^(\s*)static void acer_platform_remove\(struct platform_device \*device\)\n\1\{",
-        r"\1#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)\n"
-        r"\1static int acer_platform_remove(struct platform_device *device)\n"
-        r"\1#else\n"
-        r"\1static void acer_platform_remove(struct platform_device *device)\n"
-        r"\1#endif\n"
-        r"\1{",
-        text,
-        count=1,
-    )
-    if count != 1:
-        raise SystemExit("Could not patch Linuwu-Sense source: platform remove signature")
-    changed = True
+    re_replace_once(r'^(\s*)static void acer_platform_remove\(struct platform_device \*device\)\n\1\{',
+                    r'\1#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)\n'
+                    r'\1static int acer_platform_remove(struct platform_device *device)\n'
+                    r'\1#else\n'
+                    r'\1static void acer_platform_remove(struct platform_device *device)\n'
+                    r'\1#endif\n'
+                    r'\1{',
+                    "platform remove signature")
 
 remove_start = text.find("acer_platform_remove")
 pm_start = text.find("#ifdef CONFIG_PM_SLEEP", remove_start)
 if remove_start != -1 and pm_start != -1 and "damx_platform_profile_remove_compat();" not in text[remove_start:pm_start]:
-    replace_once("     acer_rfkill_exit();\n }\n \n #ifdef CONFIG_PM_SLEEP",
-                 "     if (platform_profile_support)\n"
-                 "         damx_platform_profile_remove_compat();\n"
-                 " \n"
-                 "     acer_rfkill_exit();\n"
-                 " \n"
-                 " #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)\n"
-                 "     return 0;\n"
-                 " #endif\n"
-                 " }\n"
-                 " \n"
-                 " #ifdef CONFIG_PM_SLEEP",
-                 "platform remove cleanup")
+    re_replace_once(r'(\s*acer_rfkill_exit\(\);\n\s*\}\n\s*\n\s*#ifdef CONFIG_PM_SLEEP)',
+                    r'\n     if (platform_profile_support)\n'
+                    r'         damx_platform_profile_remove_compat();\n'
+                    r'\n'
+                    r'     acer_rfkill_exit();\n'
+                    r'\n'
+                    r' #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)\n'
+                    r'     return 0;\n'
+                    r' #endif\n'
+                    r' }\n'
+                    r'\n'
+                    r' #ifdef CONFIG_PM_SLEEP',
+                    "platform remove cleanup")
 
 if changed:
     source.write_text(text)
