@@ -96,8 +96,8 @@ Description: Div Acer Manager Max (DAMX)
 EOL
 
 # Create systemd service file
-mkdir -p "$BUILD_DIR/etc/systemd/system"
-cat > "$BUILD_DIR/etc/systemd/system/damx-daemon.service" << EOL
+mkdir -p "$BUILD_DIR/lib/systemd/system"
+cat > "$BUILD_DIR/lib/systemd/system/damx-daemon.service" << EOL
 [Unit]
 Description=DAMX Daemon for Acer laptops
 After=network.target
@@ -122,9 +122,21 @@ set -e
 echo "Installing drivers..."
 cd /opt/damx/src/Linuwu-Sense
 make install
+
+echo "Checking for service file..."
+if [ -f "/lib/systemd/system/damx-daemon.service" ]; then
+    echo "Service file found at /lib/systemd/system/damx-daemon.service"
+else
+    echo "ERROR: Service file NOT found at /lib/systemd/system/damx-daemon.service"
+    # Search for it
+    find / -name "damx-daemon.service" 2>/dev/null || true
+fi
+
 echo "Reloading systemd..."
 systemctl daemon-reload
+echo "Enabling damx-daemon.service..."
 systemctl enable damx-daemon.service || true
+echo "Starting damx-daemon.service..."
 systemctl start damx-daemon.service || true
 exit 0
 EOL
