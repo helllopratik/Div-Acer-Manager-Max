@@ -23,7 +23,7 @@ KEY_PRESS = 1
 TARGET_KEYCODE = 425
 
 class KeyboardMonitor:
-    def __init__(self, target_keycode=TARGET_KEYCODE, command_to_run="/opt/damx/gui/DivAcerManagerMax", logger=None):
+    def __init__(self, target_keycode=TARGET_KEYCODE, command_to_run="/usr/bin/damx", logger=None):
         self.target_keycode = target_keycode
         self.command_to_run = command_to_run
         self.running = False

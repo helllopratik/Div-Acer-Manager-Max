@@ -43,6 +43,7 @@
 #include <linux/input/sparse-keymap.h>
 #include <acpi/video.h>
 #include <linux/hwmon.h>
+#include <linux/fb.h>
 #include <linux/fs.h>
 #include <linux/units.h>
 #include <linux/bitfield.h>
@@ -2218,7 +2219,7 @@ static int acer_backlight_init(struct device *dev)
 
     acer_backlight_device = bd;
 
-    bd->props.power = BACKLIGHT_POWER_ON;
+    bd->props.power = FB_BLANK_UNBLANK;
     bd->props.brightness = read_brightness(bd);
     backlight_update_status(bd);
     return 0;
@@ -3083,8 +3084,7 @@ static void acer_wmi_notify_event(u32 value, void *context)
 
     status = wmi_get_event_data(value, &response);
     if (ACPI_FAILURE(status)) {
-        pr_warn("bad event status 0x%x
-", status);
+        pr_warn("bad event status 0x%x\n", status);
         return;
     }
 

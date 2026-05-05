@@ -2,11 +2,11 @@
 
 # DAMX Remote Installer Script (DEB-based)
 # This script downloads and installs the latest DAMX Suite for Acer laptops on Linux
-# Usage: curl -sSL https://raw.githubusercontent.com/PXDiv/Div-Acer-Manager-Max/main/scripts/remoteSetup.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/helllopratik/Div-Acer-Manager-Max/main/scripts/remoteSetup.sh | bash
 
 # Constants
 SCRIPT_VERSION="2.0.0"
-GITHUB_REPO="PXDiv/Div-Acer-Manager-Max"
+GITHUB_REPO="helllopratik/Div-Acer-Manager-Max"
 TEMP_DIR="/tmp/damx-install-$$"
 
 # Colors for terminal output

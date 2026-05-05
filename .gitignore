@@ -1,16 +1,31 @@
-
+# .NET
 DivAcerManagerMax/obj/
+DivAcerManagerMax/bin/
 
-DivAcerManagerMax/bin/Release/net9.0/linux-x64/
-
-DivAcerManagerMax/bin/Debug/net9.0/
-
-Publish/
-
-publish/
-
-buildPublish/
-
+# Python
+**/__pycache__/
+*.pyc
 DAMM-Daemon/build/
-
 DAMM-Daemon/dist/
+DAMM-Daemon/*.spec
+
+# Kernel Module build artifacts
+Linuwu-Sense/src/*.ko
+Linuwu-Sense/src/*.o
+Linuwu-Sense/src/*.mod*
+Linuwu-Sense/src/.*.cmd
+Linuwu-Sense/src/modules.order
+Linuwu-Sense/src/Module.symvers
+Linuwu-Sense/modules.order
+Linuwu-Sense/Module.symvers
+Linuwu-Sense/.*.cmd
+Linuwu-Sense/.tmp_versions/
+
+# Packaging
+build/
+*.deb
+
+# IDEs
+.idea/
+*.swp
+*~
