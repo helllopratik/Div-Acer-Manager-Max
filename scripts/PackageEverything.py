@@ -19,17 +19,23 @@ class DAMXBuilder:
     def __init__(self):
         # Use the directory where the script is located
         script_path = Path(__file__).parent.absolute()
-        self.base_dir = script_path
-        self.daemon_dir = self.base_dir / "Div-Acer-Manager-Max" / "DAMM-Daemon"
-        self.gui_dir = self.base_dir / "Div-Acer-Manager-Max" / "DivAcerManagerMax"
-        self.drivers_dir = self.base_dir / "Div-Linuwu-Sense"
-        self.publish_dir = self.base_dir / "Publish"
-        self.setup_script = self.base_dir / "Setup.sh"
+        # Project root is one level up from scripts/
+        self.project_root = script_path.parent
+        self.base_dir = self.project_root # Use project root as base
+        self.daemon_dir = self.project_root / "DAMM-Daemon"
+        self.gui_dir = self.project_root / "DivAcerManagerMax"
+        # Drivers are usually cloned next to the project folder, but let's check both next to it and inside (if cloned there)
+        self.drivers_dir = self.project_root.parent / "Div-Linuwu-Sense"
+        if not self.drivers_dir.exists():
+             self.drivers_dir = self.project_root / "Linuwu-Sense"
+        
+        self.publish_dir = self.project_root / "Publish"
+        self.setup_script = self.project_root / "scripts" / "local-setup.sh"
         
         # Icon files to copy
         self.icon_files = [
             self.gui_dir / "icon.png",
-            Path("/home/div/Projects/Div-Acer-Manager-Max/DivAcerManagerMax/iconTransparent.png")
+            self.gui_dir / "iconTransparent.png"
         ]
         
         print(f"Script location: {script_path}")
