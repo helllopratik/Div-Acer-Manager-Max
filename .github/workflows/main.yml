@@ -26,6 +26,8 @@ on:
         type: choice
         options: [ 'false', 'true' ]
 
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -106,6 +108,10 @@ jobs:
             xz -9e --threads=0 DivAcerManagerMax.pdb.tar
           fi
 
+      - name: Checkout Div-Linuwu-Sense Driver
+        run: |
+          git clone https://github.com/PXDiv/Div-Linuwu-Sense.git ./Div-Linuwu-Sense
+
       - name: Package .deb file
         run: |
           chmod +x scripts/make-deb.sh
@@ -128,6 +134,33 @@ jobs:
             DAMX-${{ github.event.inputs.tag }}.tar.xz
             DivAcerManagerMax.pdb.tar.xz
             *.deb
-          token: ${{ secrets.GH_PAT_RELEASE }}
+          body: |
+            # 🚀 DAMX Release ${{ github.event.inputs.tag }}
+            
+            ### 📥 Installation Instructions
+            
+            #### Option 1: Debian/Ubuntu (Recommended)
+            1. Download the `.deb` file from the assets below.
+            2. Install it using:
+               ```bash
+               sudo apt install ./damx_*.deb
+               ```
+            3. The installation will automatically set up the GUI and Daemon.
+            
+            #### Option 2: Manual Installation (.tar.xz)
+            1. Download the `DAMX-*.tar.xz` file.
+            2. Extract the archive:
+               ```bash
+               tar -xJf DAMX-*.tar.xz
+               ```
+            3. Run the setup script:
+               ```bash
+               cd DAMX-* && sudo ./setup.sh
+               ```
+            
+            ---
+            *Built on: $(date)*
+            *Commit: ${{ github.sha }}*
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 

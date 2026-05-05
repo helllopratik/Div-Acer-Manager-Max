@@ -26,6 +26,9 @@ on:
         - 'div-linuwu-sense'
         - 'linuwu-sense'
 
+permissions:
+  contents: write
+
 jobs:
   build-and-package:
     runs-on: ubuntu-latest
@@ -33,8 +36,6 @@ jobs:
     steps:
     - name: Checkout main repository
       uses: actions/checkout@v4
-      with:
-        path: Div-Acer-Manager-Max
     
     - name: Download and Setup Drivers
       run: |
@@ -49,12 +50,11 @@ jobs:
         fi
         
         echo "✓ Drivers repository cloned successfully"
-        ls -la drivers-temp/
     
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.x'
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -63,52 +63,36 @@ jobs:
     
     - name: Install PyInstaller
       run: |
+        python -m pip install --upgrade pip
         pip install pyinstaller
     
     - name: Detect versions from source files
       id: versions
       run: |
         # Detect GUI version
-        GUI_VERSION=$(grep -oP 'private readonly string ProjectVersion\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/DivAcerManagerMax/MainWindow.axaml.cs || echo "unknown")
+        GUI_VERSION=$(grep -oP 'private readonly string ProjectVersion\s*=\s*"\K[\d.]+' DivAcerManagerMax/MainWindow.axaml.cs || echo "unknown")
         echo "gui_version=$GUI_VERSION" >> $GITHUB_OUTPUT
         
         # Detect daemon version  
-        DAEMON_VERSION=$(grep -oP 'VERSION\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/DAMM-Daemon/DAMX-Daemon.py || echo "unknown")
+        DAEMON_VERSION=$(grep -oP 'VERSION\s*=\s*"\K[\d.]+' DAMM-Daemon/DAMX-Daemon.py || echo "unknown")
         echo "daemon_version=$DAEMON_VERSION" >> $GITHUB_OUTPUT
         
         # Detect drivers version based on selected drivers
-        if [ "${{ inputs.drivers_version }}" == "linuwu-sense" ]; then
-          DRIVERS_VERSION=$(grep -oP '#define\s+DRIVER_VERSION\s+"\K[\d.]+' drivers-temp/src/linuwu_sense.c || echo "unknown")
-        else
-          DRIVERS_VERSION=$(grep -oP '#define\s+DRIVER_VERSION\s+"\K[\d.]+' drivers-temp/src/linuwu_sense.c || echo "unknown")
-        fi
+        DRIVERS_VERSION=$(grep -oP '#define\s+DRIVER_VERSION\s+"\K[\d.]+' drivers-temp/src/linuwu_sense.c || echo "unknown")
         echo "drivers_version=$DRIVERS_VERSION" >> $GITHUB_OUTPUT
         echo "drivers_type=${{ inputs.drivers_version }}" >> $GITHUB_OUTPUT
-        
-        echo "Detected versions:"
-        echo "  GUI: $GUI_VERSION"
-        echo "  Daemon: $DAEMON_VERSION" 
-        echo "  Drivers: $DRIVERS_VERSION (${{ inputs.drivers_version }})"
     
     - name: Build Python Daemon
       run: |
-        cd Div-Acer-Manager-Max/DAMM-Daemon
-        
-        # Install dependencies if requirements.txt exists
+        cd DAMM-Daemon
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
         fi
-        
-        # Build with PyInstaller
         pyinstaller --onefile --clean DAMX-Daemon.py
         
-        echo "✓ Daemon built successfully"
-        ls -la dist/
-    
     - name: Build .NET GUI
       run: |
-        cd Div-Acer-Manager-Max/DivAcerManagerMax
-        
+        cd DivAcerManagerMax
         dotnet publish \
           -c Release \
           -f net9.0 \
@@ -116,212 +100,88 @@ jobs:
           --self-contained true \
           /p:PublishSingleFile=true \
           /p:IncludeNativeLibrariesForSelfExtract=true \
-          /p:IncludeAllContentForSelfExtract=true
-        
-        echo "✓ GUI built successfully"
-        ls -la bin/Release/net9.0/linux-x64/publish/
+          /p:IncludeAllContentForSelfExtract=true \
+          -o ./publish
     
     - name: Create Package Structure
       run: |
-        # Use GUI version as main package version
         PACKAGE_VERSION="${{ steps.versions.outputs.gui_version }}"
         PACKAGE_DIR="DAMX-${PACKAGE_VERSION}"
-        
-        echo "Creating package directory: $PACKAGE_DIR"
         mkdir -p "$PACKAGE_DIR"/{DAMX-Daemon,DAMX-GUI,Linuwu-Sense}
+        
+        cp DAMM-Daemon/dist/DAMX-Daemon "$PACKAGE_DIR/DAMX-Daemon/"
+        cp DivAcerManagerMax/publish/* "$PACKAGE_DIR/DAMX-GUI/" 2>/dev/null || true
+        # Ensure the main binary is named correctly if it was published with a different name
+        find DivAcerManagerMax/publish/ -type f -executable -name "*DivAcerManagerMax*" -exec cp {} "$PACKAGE_DIR/DAMX-GUI/DivAcerManagerMax" \;
+        
+        cp -r drivers-temp/* "$PACKAGE_DIR/Linuwu-Sense/"
+        cp scripts/local-setup.sh "$PACKAGE_DIR/setup.sh"
+        
+        # Update version info in setup script
+        sed -i "s/PROJECT_VERSION=.*/PROJECT_VERSION=${{ steps.versions.outputs.gui_version }}/g" "$PACKAGE_DIR/setup.sh"
+        sed -i "s/DAEMON_VERSION=.*/DAEMON_VERSION=${{ steps.versions.outputs.daemon_version }}/g" "$PACKAGE_DIR/setup.sh"
+        sed -i "s/DRIVERS_VERSION=.*/DRIVERS_VERSION=${{ steps.versions.outputs.drivers_version }}/g" "$PACKAGE_DIR/setup.sh"
+        chmod +x "$PACKAGE_DIR/setup.sh"
         
         echo "package_dir=$PACKAGE_DIR" >> $GITHUB_ENV
         echo "package_version=$PACKAGE_VERSION" >> $GITHUB_ENV
-    
-    - name: Copy Daemon Executable
+
+    - name: Generate DEB Package
       run: |
-        cp Div-Acer-Manager-Max/DAMM-Daemon/dist/DAMX-Daemon "${{ env.package_dir }}/DAMX-Daemon/"
-        chmod +x "${{ env.package_dir }}/DAMX-Daemon/DAMX-Daemon"
-        echo "✓ Daemon executable copied"
-    
-    - name: Copy GUI Executable and Icons
-      run: |
-        # Copy the main executable
-        find Div-Acer-Manager-Max/DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/ -type f -executable -name "*DivAcerManagerMax*" -exec cp {} "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax" \;
-        
-        # If no specific executable found, copy the first executable
-        if [ ! -f "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax" ]; then
-          find Div-Acer-Manager-Max/DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/ -type f -executable | head -1 | xargs -I {} cp {} "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax"
-        fi
-        
-        chmod +x "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax"
-        
-        # Copy icon files if they exist
-        if [ -f "Div-Acer-Manager-Max/DivAcerManagerMax/icon.png" ]; then
-          cp "Div-Acer-Manager-Max/DivAcerManagerMax/icon.png" "${{ env.package_dir }}/DAMX-GUI/"
-        fi
-        
-        if [ -f "Div-Acer-Manager-Max/DivAcerManagerMax/iconTransparent.png" ]; then
-          cp "Div-Acer-Manager-Max/DivAcerManagerMax/iconTransparent.png" "${{ env.package_dir }}/DAMX-GUI/"
-        fi
-        
-        echo "✓ GUI executable and icons copied"
-    
-    - name: Copy Drivers
-      run: |
-        cp -r drivers-temp/* "${{ env.package_dir }}/Linuwu-Sense/"
-        echo "✓ Drivers copied"
-    
-    - name: Copy and Update Setup Script
-      run: |
-        if [ -f "Div-Acer-Manager-Max/scripts/local-setup.sh" ]; then
-          cp "Div-Acer-Manager-Max/scripts/local-setup.sh" "${{ env.package_dir }}/setup.sh"
-        elif [ -f "scripts/local-setup.sh" ]; then
-          cp "scripts/local-setup.sh" "${{ env.package_dir }}/setup.sh"
-        else
-          echo "Warning: local-setup.sh not found, creating a basic one"
-          cat > "${{ env.package_dir }}/setup.sh" << 'EOF'
-        #!/bin/bash
-        # DAMX Installation Script
-        echo "DAMX Installation"
-        echo "=================="
-        echo "Please run the installation manually or provide a proper setup.sh script"
-        EOF
-        fi
-        
-        # Update version information in setup script
-        sed -i "s/SCRIPT_VERSION\s*=\s*\".*\"/SCRIPT_VERSION=\"${{ steps.versions.outputs.gui_version }}\"/g" "${{ env.package_dir }}/setup.sh"
-        sed -i "s/PROJECT_VERSION\s*=\s*.*/PROJECT_VERSION=${{ steps.versions.outputs.gui_version }}/g" "${{ env.package_dir }}/setup.sh"
-        sed -i "s/DAEMON_VERSION\s*=\s*.*/DAEMON_VERSION=${{ steps.versions.outputs.daemon_version }}/g" "${{ env.package_dir }}/setup.sh"
-        sed -i "s/DRIVERS_VERSION\s*=\s*.*/DRIVERS_VERSION=${{ steps.versions.outputs.drivers_version }}/g" "${{ env.package_dir }}/setup.sh"
-        
-        chmod +x "${{ env.package_dir }}/setup.sh"
-        echo "✓ Setup script updated and made executable"
-    
-    - name: Create Release Information
-      run: |
-        cat > "${{ env.package_dir }}/release.txt" << EOF
-        DAMX Release Information
-        ========================
-        
-        Project Version: ${{ steps.versions.outputs.gui_version }}
-        Daemon Version: ${{ steps.versions.outputs.daemon_version }}
-        Drivers Version: ${{ steps.versions.outputs.drivers_version }}
-        
-        Build Date: $(date)
-        Built on: $(uname -a)
-        GitHub Run: ${{ github.run_number }}
-        Commit: ${{ github.sha }}
-        
-        Components:
-        - DAMX-Daemon: Python daemon compiled with PyInstaller
-        - DAMX-GUI: .NET 9.0 GUI application (self-contained)
-        - Linuwu-Sense: Hardware drivers
-        - setup.sh: Installation script
-        EOF
-        
-        echo "✓ Release information created"
-    
+        chmod +x scripts/make-deb.sh
+        ./scripts/make-deb.sh DivAcerManagerMax/publish DAMM-Daemon/dist
+
     - name: Create Package Archive
       run: |
-        # Create tar.xz archive
         tar -cJf "${{ env.package_dir }}.tar.xz" "${{ env.package_dir }}"
-        
-        # Generate checksums
         sha256sum "${{ env.package_dir }}.tar.xz" > "${{ env.package_dir }}.tar.xz.sha256"
-        
-        echo "✓ Package archive created"
-        echo "Archive size: $(du -h ${{ env.package_dir }}.tar.xz | cut -f1)"
-    
-    - name: Display Package Contents
-      run: |
-        echo "📦 Package Contents:"
-        find "${{ env.package_dir }}" -type f -exec ls -lh {} \; | sort
-        
-        echo ""
-        echo "📋 Package Summary:"
-        echo "Package: ${{ env.package_dir }}.tar.xz"
-        echo "Size: $(du -h ${{ env.package_dir }}.tar.xz | cut -f1)"
-        echo "Checksum: $(cat ${{ env.package_dir }}.tar.xz.sha256)"
-    
-    - name: Upload Package as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.package_dir }}
-        path: |
-          ${{ env.package_dir }}.tar.xz
-          ${{ env.package_dir }}.tar.xz.sha256
-        retention-days: 30
     
     - name: Create GitHub Release
       if: ${{ inputs.publish_release }}
-      uses: actions/create-release@v1
-      id: create_release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT_RELEASE }}
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ inputs.tag }}
-        release_name: DAMX ${{ inputs.tag }}
+        name: DAMX ${{ inputs.tag }}
+        prerelease: ${{ inputs.is_prerelease }}
+        files: |
+          ${{ env.package_dir }}.tar.xz
+          ${{ env.package_dir }}.tar.xz.sha256
+          *.deb
         body: |
-          # DAMX Release ${{ inputs.tag }}
+          # 🚀 DAMX Release ${{ inputs.tag }}
           
-          ## Version Information
-          - **Project Version**: ${{ steps.versions.outputs.gui_version }}
-          - **Daemon Version**: ${{ steps.versions.outputs.daemon_version }}
-          - **Drivers Version**: ${{ steps.versions.outputs.drivers_version }}
-          - **Drivers Type**: ${{ steps.versions.outputs.drivers_type }}
+          ### 📥 Installation Instructions
           
-          ## Components
-          - **DAMX-Daemon**: Python daemon compiled with PyInstaller
-          - **DAMX-GUI**: .NET 9.0 GUI application (self-contained, linux-x64)
-          - **Linuwu-Sense**: Hardware drivers (${{ steps.versions.outputs.drivers_type }})
-          - **setup.sh**: Installation script
+          #### Option 1: Debian/Ubuntu (Recommended)
+          1. Download the `.deb` file from the assets below.
+          2. Install it using:
+             ```bash
+             sudo apt install ./damx_${{ steps.versions.outputs.gui_version }}_amd64.deb
+             ```
+          3. The installation will automatically set up the GUI and Daemon.
           
-          ## Installation
-          1. Download the `${{ env.package_dir }}.tar.xz` file
-          2. Extract: `tar -xJf ${{ env.package_dir }}.tar.xz`
-          3. Run: `cd ${{ env.package_dir }} && ./setup.sh`
+          #### Option 2: Manual Installation (.tar.xz)
+          1. Download `${{ env.package_dir }}.tar.xz`.
+          2. Extract the archive:
+             ```bash
+             tar -xJf ${{ env.package_dir }}.tar.xz
+             ```
+          3. Run the setup script:
+             ```bash
+             cd ${{ env.package_dir }} && sudo ./setup.sh
+             ```
           
-          ## Checksums
+          ### 🛠 Component Versions
+          - **GUI Version**: `${{ steps.versions.outputs.gui_version }}`
+          - **Daemon Version**: `${{ steps.versions.outputs.daemon_version }}`
+          - **Drivers Version**: `${{ steps.versions.outputs.drivers_version }}`
+          - **Drivers Type**: `${{ steps.versions.outputs.drivers_type }}`
+          
+          ---
+          **Checksum (SHA256):**
           ```
           $(cat ${{ env.package_dir }}.tar.xz.sha256)
           ```
           
-          ---
-          Built on: $(date)  
-          Commit: ${{ github.sha }}
-        draft: false
-        prerelease: ${{ inputs.is_prerelease }}
-    
-    - name: Upload Release Asset
-      if: ${{ inputs.publish_release }}
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT_RELEASE }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./${{ env.package_dir }}.tar.xz
-        asset_name: ${{ env.package_dir }}.tar.xz
-        asset_content_type: application/x-xz
-    
-    - name: Upload Checksum File
-      if: ${{ inputs.publish_release }}
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT_RELEASE }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./${{ env.package_dir }}.tar.xz.sha256
-        asset_name: ${{ env.package_dir }}.tar.xz.sha256
-        asset_content_type: text/plain
-    
-    - name: Build Summary
-      run: |
-        echo "🎉 Build and packaging completed successfully!"
-        echo ""
-        echo "📊 Build Summary:"
-        echo "- Tag: ${{ inputs.tag }}"
-        echo "- Pre-release: ${{ inputs.is_prerelease }}"
-        echo "- Published: ${{ inputs.publish_release }}"
-        echo "- Drivers: ${{ inputs.drivers_version }}"
-        echo "- Package: ${{ env.package_dir }}.tar.xz"
-        echo "- Size: $(du -h ${{ env.package_dir }}.tar.xz | cut -f1)"
-        
-        if [ "${{ inputs.publish_release }}" == "true" ]; then
-          echo "- Release URL: ${{ steps.create_release.outputs.html_url }}"
-        fi
+          *Built on: $(date)*
+          *Commit: ${{ github.sha }}*
