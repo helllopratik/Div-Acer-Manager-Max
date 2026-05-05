@@ -34,7 +34,7 @@ apt-get install -y build-essential linux-headers-$(uname -r) python3 python3-pip
 
 # Install CustomTkinter for the UI
 echo -e "\n${YELLOW}[2/4] Installing CustomTkinter...${NC}"
-pip3 install customtkinter --break-system-packages || pip3 install customtkinter
+pip3 install customtkinter Pillow --break-system-packages || pip3 install customtkinter Pillow
 
 # 3. Build & Install Drivers
 echo -e "\n${YELLOW}[3/4] Building Linuwu-Sense Drivers...${NC}"
@@ -42,6 +42,13 @@ cd Linuwu-Sense
 make clean && make
 make install
 cd ..
+
+# Secure Boot handling
+if mokutil --sb-state 2>/dev/null | grep -q "SecureBoot enabled"; then
+    echo -e "\n${YELLOW}[!] Secure Boot is enabled. Attempting to sign the module...${NC}"
+    chmod +x secureboot.sh
+    ./secureboot.sh || echo -e "${RED}Failed to sign module. You may need to manually run secureboot.sh${NC}"
+fi
 
 # 4. Install UI and Permissions
 echo -e "\n${YELLOW}[4/4] Installing AcerNX UI and configuring permissions...${NC}"

@@ -42,7 +42,7 @@ install: all
 	sudo install -m 644 src/$(MODNAME).ko $(MDIR)
 	sudo depmod -a
 	@echo "$(MODNAME)" | sudo tee /etc/modules-load.d/$(MODNAME).conf > /dev/null
-	sudo modprobe $(MODNAME)
+	-sudo modprobe $(MODNAME)
 	@sudo cp linuwu_sense.service /etc/systemd/system/
 	@sudo systemctl daemon-reload
 	@sudo systemctl enable linuwu_sense.service

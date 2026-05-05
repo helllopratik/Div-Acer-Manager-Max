@@ -5,6 +5,9 @@ import threading
 import time
 import subprocess
 import customtkinter as ctk
+from tkinter import filedialog
+from PIL import Image
+import shutil
 
 # Configure CustomTkinter
 ctk.set_appearance_mode("Dark")
@@ -244,7 +247,81 @@ class AcerNX(ctk.CTk):
             switch.pack(side="right", pady=10)
             row += 1
 
+        # OS Boot Image Customization (Linux Plymouth/GRUB safe alternative to BIOS flashing)
+        boot_f = ctk.CTkFrame(grid, fg_color="transparent")
+        boot_f.pack(fill="x", padx=30, pady=15)
+        boot_info = ctk.CTkFrame(boot_f, fg_color="transparent")
+        boot_info.pack(side="left")
+        ctk.CTkLabel(boot_info, text="Custom OS Boot Image", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(boot_info, text="Change the Linux startup splash screen", font=ctk.CTkFont(size=12), text_color="gray").pack(anchor="w")
+        
+        self.boot_btn = ctk.CTkButton(boot_f, text="Select Image", command=self.set_custom_boot_image, fg_color="#00A8FF", hover_color="#0052CC")
+        self.boot_btn.pack(side="right", pady=10)
+
         return frame
+
+    def set_custom_boot_image(self):
+        file_path = filedialog.askopenfilename(
+            title="Select Custom Boot Image",
+            filetypes=[("Image Files", "*.png *.jpg *.jpeg")]
+        )
+        if not file_path:
+            return
+            
+        try:
+            self.boot_btn.configure(text="Applying...", state="disabled")
+            self.update()
+            
+            # Since raw BIOS NVRAM writing is completely unsupported/dangerous on Linux,
+            # we implement the OS-level boot splash (Plymouth) which achieves the exact same visual effect safely.
+            theme_dir = "/usr/share/plymouth/themes/acernx"
+            subprocess.run(["pkexec", "sh", "-c", f"mkdir -p {theme_dir}"], check=True)
+            
+            # Convert image to Plymouth compatible format
+            img = Image.open(file_path)
+            img_path = "/tmp/splash.png"
+            img.save(img_path, format="PNG")
+            
+            subprocess.run(["pkexec", "sh", "-c", f"cp {img_path} {theme_dir}/splash.png"], check=True)
+            
+            # Create a simple Plymouth theme
+            theme_config = f"""[Plymouth Theme]
+Name=AcerNX Custom Boot
+Description=A theme that features a custom boot logo
+ModuleName=script
+
+[script]
+ImageDir={theme_dir}
+ScriptFile={theme_dir}/acernx.script
+"""
+            script_content = """Window.SetBackgroundTopColor (0.0, 0.0, 0.0);
+Window.SetBackgroundBottomColor (0.0, 0.0, 0.0);
+splash_image = Image("splash.png");
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+placed_image = splash_image.Scale(splash_image.GetWidth(), splash_image.GetHeight());
+sprite = Sprite(placed_image);
+sprite.SetX(screen_width / 2 - placed_image.GetWidth() / 2);
+sprite.SetY(screen_height / 2 - placed_image.GetHeight() / 2);
+"""
+            
+            with open("/tmp/acernx.plymouth", "w") as f:
+                f.write(theme_config)
+            with open("/tmp/acernx.script", "w") as f:
+                f.write(script_content)
+                
+            subprocess.run(["pkexec", "sh", "-c", f"cp /tmp/acernx.plymouth {theme_dir}/acernx.plymouth && cp /tmp/acernx.script {theme_dir}/acernx.script"], check=True)
+            
+            # Apply Plymouth theme
+            subprocess.run(["pkexec", "sh", "-c", f"plymouth-set-default-theme -R acernx"], check=True)
+            
+            self.boot_btn.configure(text="Success!", fg_color="green")
+            
+        except Exception as e:
+            print(f"Failed to set boot image: {e}")
+            self.boot_btn.configure(text="Failed", fg_color="red")
+        finally:
+            self.after(3000, lambda: self.boot_btn.configure(text="Select Image", fg_color="#00A8FF", state="normal"))
 
     # --- Hardware Logic ---
     def update_hardware_state(self):
