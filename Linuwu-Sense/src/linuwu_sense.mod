@@ -1,0 +1,1 @@
+/home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/src/linuwu_sense.o

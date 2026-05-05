@@ -1,0 +1,1 @@
+cmd_/home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/Module.symvers :=  sed 's/ko$$/o/'  /home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/modules.order | scripts/mod/modpost -m      -o /home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/Module.symvers -e -i Module.symvers -T - 

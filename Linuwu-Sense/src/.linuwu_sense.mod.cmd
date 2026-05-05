@@ -1,0 +1,1 @@
+cmd_/home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/src/linuwu_sense.mod := printf '%s\n'   src/linuwu_sense.o | awk '!x[$$0]++ { print("/home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/"$$0) }' > /home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/src/linuwu_sense.mod

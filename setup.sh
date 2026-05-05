@@ -1,6 +1,6 @@
 #!/bin/bash
-# DAMX Unified Installer - Build & Install from Source
-# This script builds the drivers, daemon, and GUI locally and installs them.
+# AcerNX Unified Setup Utility
+# This script builds the Linuwu-Sense driver and installs the lightweight Python GUI.
 
 set -e
 
@@ -12,8 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}==========================================${NC}"
-echo -e "${BLUE}       DAMX Unified Setup Utility         ${NC}"
-echo -e "${BLUE}    Build & Install directly from Source  ${NC}"
+echo -e "${BLUE}        AcerNX Unified Setup              ${NC}"
+echo -e "${BLUE}    Complete Base & Lightweight UI        ${NC}"
 echo -e "${BLUE}==========================================${NC}"
 
 # Check for root
@@ -24,164 +24,90 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Detect Version
-VERSION=$(grep -oP 'private readonly string ProjectVersion\s*=\s*"\K[^"]+' DivAcerManagerMax/MainWindow.axaml.cs || echo "1.0.0")
-echo -e "${GREEN}Detected Version: ${VERSION}${NC}"
+VERSION="2.0.0-AcerNX"
+echo -e "${GREEN}Version: ${VERSION}${NC}"
 
 # 1. Install Dependencies
-echo -e "\n${YELLOW}[1/5] Installing Build Dependencies...${NC}"
+echo -e "\n${YELLOW}[1/4] Installing Build Dependencies...${NC}"
 apt-get update
-apt-get install -y build-essential linux-headers-$(uname -r) python3 python3-pip python3-venv python3-evdev dpkg-dev wget gpg
+apt-get install -y build-essential linux-headers-$(uname -r) python3 python3-pip python3-venv python3-tk pkexec
 
-# Check for .NET 9 SDK
-if ! command -v dotnet &> /dev/null || [[ $(dotnet --version) != 9.* ]]; then
-    echo -e "${YELLOW}.NET 9 SDK not found. Installing...${NC}"
-    wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
-    chmod +x dotnet-install.sh
-    ./dotnet-install.sh --channel 9.0 --install-dir /usr/share/dotnet
-    ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
-fi
+# Install CustomTkinter for the UI
+echo -e "\n${YELLOW}[2/4] Installing CustomTkinter...${NC}"
+pip3 install customtkinter --break-system-packages || pip3 install customtkinter
 
-# Check for PyInstaller
-if ! command -v pyinstaller &> /dev/null; then
-    echo -e "${YELLOW}PyInstaller not found. Installing via pip...${NC}"
-    pip3 install pyinstaller --break-system-packages || pip3 install pyinstaller
-fi
-
-# 2. Build Drivers
-echo -e "\n${YELLOW}[2/5] Building Linuwu-Sense Drivers...${NC}"
+# 3. Build & Install Drivers
+echo -e "\n${YELLOW}[3/4] Building Linuwu-Sense Drivers...${NC}"
 cd Linuwu-Sense
 make clean && make
-cd ..
-
-# 3. Build Daemon
-echo -e "\n${YELLOW}[3/5] Building DAMX-Daemon...${NC}"
-cd DAMM-Daemon
-pyinstaller --onefile --clean DAMX-Daemon.py
-cd ..
-
-# 4. Build GUI
-echo -e "\n${YELLOW}[4/5] Building DAMX-GUI (.NET 9)...${NC}"
-cd DivAcerManagerMax
-dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
-cd ..
-
-# 5. Package Locally
-echo -e "\n${YELLOW}[5/5] Generating DEB Package...${NC}"
-BUILD_DIR="local_build_deb"
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR/DEBIAN"
-mkdir -p "$BUILD_DIR/usr/bin"
-mkdir -p "$BUILD_DIR/usr/lib/damx"
-mkdir -p "$BUILD_DIR/usr/share/applications"
-mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
-mkdir -p "$BUILD_DIR/opt/damx/src"
-
-# Copy binaries
-cp DAMM-Daemon/dist/DAMX-Daemon "$BUILD_DIR/usr/lib/damx/"
-cp DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/DivAcerManagerMax "$BUILD_DIR/usr/lib/damx/"
-cp DivAcerManagerMax/icon.png "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/damx.png"
-cp -r Linuwu-Sense "$BUILD_DIR/opt/damx/src/"
-
-# Create control file
-cat > "$BUILD_DIR/DEBIAN/control" << EOL
-Package: damx
-Version: ${VERSION}
-Section: utils
-Priority: optional
-Architecture: amd64
-Depends: python3, python3-evdev, libc6, libgcc-s1, libstdc++6
-Maintainer: helllopratik <pratikgondane07@gmail.com>
-Description: Div Acer Manager Max (DAMX)
- Built locally from source. Modern Acer laptop management suite.
-EOL
-
-# Create systemd service file
-mkdir -p "$BUILD_DIR/lib/systemd/system"
-cat > "$BUILD_DIR/lib/systemd/system/damx-daemon.service" << EOL
-[Unit]
-Description=DAMX Daemon for Acer laptops
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/lib/damx/DAMX-Daemon
-Restart=on-failure
-RestartSec=5
-User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-# Post-install script (Install driver)
-cat > "$BUILD_DIR/DEBIAN/postinst" << EOL
-#!/bin/bash
-set -e
-echo "Installing drivers..."
-cd /opt/damx/src/Linuwu-Sense
 make install
+cd ..
 
-echo "Checking for service file..."
-if [ -f "/lib/systemd/system/damx-daemon.service" ]; then
-    echo "Service file found at /lib/systemd/system/damx-daemon.service"
-else
-    echo "ERROR: Service file NOT found at /lib/systemd/system/damx-daemon.service"
-    # Search for it
-    find / -name "damx-daemon.service" 2>/dev/null || true
+# 4. Install UI and Permissions
+echo -e "\n${YELLOW}[4/4] Installing AcerNX UI and configuring permissions...${NC}"
+
+# Dynamically find model path
+MODEL_DIR=$(ls /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/ | grep -E 'predator_sense|nitro_sense' || true)
+
+cat > /etc/tmpfiles.d/acernx.conf << EOL
+# AcerNX permissions
+f /sys/firmware/acpi/platform_profile 0660 root linuwu_sense
+f /sys/class/leds/acer-wmi::kbd_backlight/brightness 0660 root linuwu_sense
+EOL
+
+if [ -n "$MODEL_DIR" ]; then
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/$MODEL_DIR/fan_speed 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/$MODEL_DIR/battery_limiter 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/$MODEL_DIR/usb_charging 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/$MODEL_DIR/lcd_override 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/$MODEL_DIR/boot_animation_sound 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/$MODEL_DIR/backlight_timeout 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
+    echo "f /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/four_zoned_kb/four_zone_mode 0660 root linuwu_sense" >> /etc/tmpfiles.d/acernx.conf
 fi
 
-echo "Reloading systemd..."
-systemctl daemon-reload
-echo "Enabling damx-daemon.service..."
-systemctl enable damx-daemon.service || true
-echo "Starting damx-daemon.service..."
-systemctl start damx-daemon.service || true
-exit 0
-EOL
-chmod 755 "$BUILD_DIR/DEBIAN/postinst"
+systemd-tmpfiles --create /etc/tmpfiles.d/acernx.conf || true
 
-# Pre-remove script
-cat > "$BUILD_DIR/DEBIAN/prerm" << EOL
-#!/bin/bash
-set -e
-echo "Stopping DAMX services..."
-systemctl stop damx-daemon.service || true
-systemctl disable damx-daemon.service || true
-exit 0
-EOL
-chmod 755 "$BUILD_DIR/DEBIAN/prerm"
+# Copy UI script
+cp acernx.py /usr/local/bin/acernx
+chmod 755 /usr/local/bin/acernx
 
-# Wrapper script
-cat > "$BUILD_DIR/usr/bin/damx" << EOL
-#!/bin/bash
-/usr/lib/damx/DivAcerManagerMax "\$@"
-EOL
-chmod 755 "$BUILD_DIR/usr/bin/damx"
-
-# Desktop entry
-cat > "$BUILD_DIR/usr/share/applications/damx.desktop" << EOL
+# Create Desktop Entry
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/acernx.desktop << EOL
 [Desktop Entry]
-Name=DAMX
-Comment=Div Acer Manager Max
-Exec=/usr/bin/damx
-Icon=damx
+Name=AcerNX
+Comment=Acer Linux Control Center
+Exec=/usr/local/bin/acernx
+Icon=acernx
 Terminal=false
 Type=Application
 Categories=Utility;System;
 EOL
 
-# Build the DEB
-dpkg-deb --build "$BUILD_DIR" "damx_local.deb"
+# Download AI Icon
+echo "Downloading AI-generated Icon..."
+wget -qO /usr/share/icons/hicolor/256x256/apps/acernx.png "https://image.pollinations.ai/prompt/Modern%20Minimalist%20Cyberpunk%20Tux%20Penguin%20Neon%20Blue%20App%20Icon?width=256&height=256&nologo=true" || true
+gtk-update-icon-cache /usr/share/icons/hicolor || true
 
-# Install the DEB
-echo -e "\n${GREEN}Installing the generated package...${NC}"
-dpkg -i damx_local.deb || apt-get install -f -y
+# Add pkexec policy for silent sysfs writes (Fallback)
+mkdir -p /usr/share/polkit-1/actions
+cat > /usr/share/polkit-1/actions/com.acernx.sysfs.policy << EOL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <action id="com.acernx.sysfs">
+    <description>Write to Acer Sysfs</description>
+    <message>Authentication is required to change hardware settings</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/bin/sh</annotate>
+  </action>
+</policyconfig>
+EOL
 
-echo -e "\n${GREEN}🎉 DAMX has been built and installed successfully!${NC}"
-echo -e "You can now run it by typing ${BLUE}damx${NC} in the terminal or finding it in your menu."
-
-# Cleanup
-rm -rf "$BUILD_DIR"
-rm -f damx_local.deb
+echo -e "\n${GREEN}🎉 AcerNX has been installed successfully!${NC}"
+echo -e "You can now run it from your application menu or by typing ${BLUE}acernx${NC} in the terminal."
+echo -e "${YELLOW}Note: Ensure your user is in the 'linuwu_sense' group. You may need to log out and log back in.${NC}"

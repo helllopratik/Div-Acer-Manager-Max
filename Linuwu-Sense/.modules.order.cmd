@@ -1,0 +1,1 @@
+cmd_/home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/modules.order := {   echo /home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/src/linuwu_sense.ko; :; } > /home/hellopratik/Desktop/Div-Acer-Manager-Max/Linuwu-Sense/modules.order
