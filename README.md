@@ -1,112 +1,45 @@
+# Div Acer Manager Max (DAMX)
+
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/6d383e82-8221-438b-9d6d-a19e998fcc59" alt="icon" width="80" style="vertical-align: middle;">
+  <img src="https://github.com/user-attachments/assets/6d383e82-8221-438b-9d6d-a19e998fcc59" alt="icon" width="100">
 </p>
 
-<h1 align="center">
-  Div Acer Manager Max
-</h1>
+**Div Acer Manager Max** is a powerful Linux GUI utility for Acer laptops. It replicates and expands on Acer’s NitroSense and PredatorSense capabilities on Linux with full fan control, performance modes, and more.
 
-**Div Acer Manager Max** is a feature-rich Linux GUI utility for Acer laptops powered by the incredible [Linuwu Sense](https://github.com/0x7375646F/Linuwu-Sense) drivers. It replicates and expands on Acer’s NitroSense and PredatorSense capabilities on Linux with full fan control, performance modes, battery optimization, backlight settings, and more — all wrapped in a modern Avalonia-based UI.
+![AI Generated Hardware Manager](https://image.pollinations.ai/prompt/Acer%20Predator%20Nitro%20Gaming%20Laptop%20HUD%20Display%20Linux%20Tux%20Mascot%20Cyberpunk%20Circuitry%20Neon%20Blue%20and%20Red%20High%20Detail%208k?width=1000&height=400&nologo=true)
 
-> [!CAUTION]
-> Project is under passive development.
-
-![AI Generated Art Banner](https://image.pollinations.ai/prompt/Futuristic%20Acer%20Nitro%20Predator%20Laptop%20Software%20Manager%20Interface%20Cyberpunk%20Neon%20Vector%20Art%20Linux%20Tux?width=800&height=300&nologo=true)
-
-<h4 align="center">
-⭐ Please star this repository to show support. It motivates me to make the project better for everyone
-</h4>  
+## 🚀 Modern Kernel Support (6.1 - 6.17+)
+This fork features a **hard-patched Linuwu-Sense driver (v25.701)** with advanced compatibility layers for modern Linux kernels:
+*   **WMI Bus API Bridge**: Works on Kernel 6.12+ where legacy WMI handlers were removed.
+*   **Platform Profile 2.0**: Compatible with Kernel 6.14+ API changes.
+*   **Secure Boot Ready**: Automatically signs the driver module during installation.
 
 ## ✨ Features
+*   🔋 **Thermal Profiles**: Eco, Silent, Balanced, Performance, Turbo.
+*   🌡 **Fan Control**: Full manual/auto control for CPU and GPU fans.
+*   🔐 **Secure Boot**: Integrated MOK enrollment script.
+*   📦 **DEB Installer**: Native Debian/Ubuntu packaging.
 
-### ✅ Fully Implemented
+## 🖥️ Installation
 
-* 📦 **Automated DEB Packaging**
-  Installs cleanly and seamlessly via `.deb` packages.
+### 🔗 Easy Install (Recommended)
+Run the remote installer to automatically download and set up the latest DEB package and drivers:
+```bash
+curl -fsSL https://raw.githubusercontent.com/helllopratik/Div-Acer-Manager-Max/main/scripts/remoteSetup.sh | sudo bash
+```
 
-* 🔐 **Secure Boot Support**
-  Automatically handles MOK enrollment and driver signing during installation!
-
-* 🔋 **Performance / Thermal Profiles**
-  Eco, Silent, Balanced, Performance, Turbo — automatically adjusted based on AC/battery status
-  (e.g., Turbo hidden when on battery or unsupported)
-
-* 🌡 **Fan Control**
-  Manual and Auto fan speed modes
-  Manual disabled automatically when in Quiet profile
-
-* 💡 **LCD Override Setting**
-  Direct control over LCD power behavior
-
-* 🎨 **Keyboard Backlight Timeout Control**
-  Customize the keyboard backlight timeout
-
-* 🔊 **Boot Animation and Sound Toggle**
-  Enable/disable Acer's startup animations and sounds
-
-* 💻 **Live System Info Display**
-  Shows real-time performance profile, fan settings, calibration state, and more
-
-* 🧠 **Smart Daemon (Low Resource Use)**
-
-  * Auto-detects feature support per device
-  * Communicates with GUI in real-time
-  * Lightweight: uses \~10MB RAM
-  * Can run **independently** of GUI
-  * Recursive restart to fix software issues similar to those on Windows
-
-* 🖥️ **Modern GUI**
-
-  * Avalonia-based, clean and responsive
-  * Realtime Monitoring with Dashboard and accurate Tempreature Readings
-  * Dynamic UI hides unsupported features
-  * Real-time feedback from daemon
+### 📦 Debian/Ubuntu DEB
+Download the `.deb` from the [Releases](https://github.com/helllopratik/Div-Acer-Manager-Max/releases) page and install:
+```bash
+sudo apt install ./damx_*.deb
+```
+*(Note: The installer will prompt you to set a MOK password if Secure Boot is enabled. You must reboot and Enroll MOK on the blue screen).*
 
 ## 🧭 Compatibility
+Check the [Compatibility List](https://github.com/PXDiv/Div-Acer-Manager-Max/blob/main/Compatibility.md) for verified models.
 
-Check your device's compatibility here: [Compatibility List](https://github.com/PXDiv/Div-Acer-Manager-Max/blob/main/Compatibility.md)
-
-> Even if not here, DAMX will still work on most devices. Please file a issue on Linuwu-sense page (it will be ignored here)
-
-## 🖥️ DAMX Installation Guide
-
-You can install DAMX using either of the following methods:
-
-### 🔗 Remote Installation (Recommended DEB Install)
-
-The remote setup script automatically downloads the latest `.deb` release, installs it natively, and then builds the kernel drivers (including signing them for **Secure Boot**).
-
-1. Open a terminal window.
-
-2. Run the following command:
-
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/PXDiv/Div-Acer-Manager-Max/refs/heads/main/scripts/remoteSetup.sh -o /tmp/setup.sh && sudo bash /tmp/setup.sh
-   ```
-
-3. Follow the on-screen prompts. *(If Secure Boot is enabled, the script will guide you to enroll a MOK key upon reboot).*
-
-4. Done!
-
-### 📦 Local Installation (Alternative Method)
-
-If the remote installation fails for some reason or you've gone offline, follow these steps:
-
-1. Download the latest `.deb` release from the **Releases** section.
-
-2. Install the package via APT or dpkg:
-
-   ```bash
-   sudo apt install ./damx_*.deb
-   ```
-
-3. Extract the downloaded `DAMX-*.tar.xz` package (if you need to manually build the drivers).
-
-4. Make the `setup.sh` script executable and run it to install the drivers.
-
-5. Reboot your system after the installation completes.
-
-✅ That’s it—you’re all set!
+---
+⭐ **Please star this repository to show support!**
 
 ## 🖥️ Troubleshooting
 

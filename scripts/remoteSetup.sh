@@ -114,13 +114,14 @@ install_kernel_build_dependencies() {
 }
 
 apply_linuwu_kernel_compat() {
-  local source_file="/opt/damx/src/Linuwu-Sense/src/linuwu_sense.c"
+  local driver_dir="$1"
+  local source_file="${driver_dir}/src/linuwu_sense.c"
   if [ ! -f "$source_file" ]; then
     echo -e "${RED}Error: Linuwu-Sense source file not found at ${source_file}${NC}"
     return 1
   fi
 
-  echo -e "${YELLOW}Applying Linuwu-Sense kernel compatibility patch...${NC}"
+  echo -e "${YELLOW}Applying Linuwu-Sense kernel compatibility patch to ${source_file}...${NC}"
   python3 - "$source_file" <<'PY'
 from pathlib import Path
 import re
@@ -347,6 +348,7 @@ PY
 }
 
 handle_secure_boot() {
+  local module_to_sign="$1"
   local sb_state=$(mokutil --sb-state 2>/dev/null || true)
   if ! echo "$sb_state" | grep -iq "enabled"; then
     echo -e "${GREEN}Secure Boot is disabled or not supported. Skipping module signing.${NC}"
@@ -354,7 +356,9 @@ handle_secure_boot() {
   fi
 
   echo -e "${YELLOW}Secure Boot is enabled. Setting up module signing...${NC}"
-  local user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6 2>/dev/null)
+  # Get the actual user home (even if running with sudo)
+  local real_user="${SUDO_USER:-$USER}"
+  local user_home=$(getent passwd "$real_user" | cut -d: -f6 2>/dev/null)
   [ -z "$user_home" ] && user_home="/root"
   local keydir="$user_home/module-signing"
 
@@ -369,20 +373,14 @@ handle_secure_boot() {
     openssl x509 -in MOK.pem -outform DER -out MOK.der 2>/dev/null
   fi
 
-  # Find module
-  local module_path=$(modinfo linuwu_sense 2>/dev/null | awk '/filename:/ {print $2}')
-  if [[ -z "$module_path" ]]; then
-    module_path="/lib/modules/$(uname -r)/updates/linuwu_sense.ko"
-  fi
-
   local kdir="/lib/modules/$(uname -r)/build"
   local signfile="$kdir/scripts/sign-file"
 
-  if [[ -x "$signfile" && -f "$module_path" ]]; then
-    echo "Signing module..."
-    "$signfile" sha256 MOK.priv MOK.pem "$module_path"
+  if [[ -x "$signfile" && -f "$module_to_sign" ]]; then
+    echo "Signing module: $module_to_sign"
+    sudo "$signfile" sha256 MOK.priv MOK.pem "$module_to_sign"
   else
-    echo -e "${RED}Could not sign module (missing sign-file or module).${NC}"
+    echo -e "${RED}Could not sign module (missing sign-file or module: $module_to_sign).${NC}"
   fi
 
   if ! mokutil --list-enrolled 2>/dev/null | grep -q "Linuwu Sense Module Signing"; then
@@ -392,33 +390,49 @@ handle_secure_boot() {
     echo -e "${YELLOW}On reboot, you MUST enroll the MOK key.${NC}"
     echo -e "${YELLOW}The driver will not work until you reboot and enroll.${NC}"
     echo -e "${RED}===========================================${NC}"
-    mokutil --import MOK.der || true
+    sudo mokutil --import MOK.der || true
   else
     echo -e "${GREEN}MOK key already enrolled. Module signed successfully.${NC}"
-    depmod -a
-    modprobe linuwu_sense || true
-    systemctl restart damx-daemon 2>/dev/null || true
   fi
 }
 
 install_drivers() {
   echo -e "${YELLOW}Installing Linuwu-Sense drivers...${NC}"
   
-  if [ ! -d "/opt/damx/src/Linuwu-Sense" ]; then
-    echo -e "${RED}Error: Driver source not found in /opt/damx/src/Linuwu-Sense. The DEB package might be incomplete.${NC}"
+  local driver_src=""
+  if [ -d "/opt/damx/src/Linuwu-Sense" ]; then
+    driver_src="/opt/damx/src/Linuwu-Sense"
+  elif [ -d "Linuwu-Sense" ]; then
+    driver_src="$(pwd)/Linuwu-Sense"
+  fi
+
+  if [ -z "$driver_src" ]; then
+    echo -e "${RED}Error: Driver source not found.${NC}"
     return 1
   fi
 
   install_kernel_build_dependencies
-  apply_linuwu_kernel_compat
+  # Note: The source is already hard-patched in the repo, but we keep this for robustness
+  apply_linuwu_kernel_compat "$driver_src"
 
-  cd "/opt/damx/src/Linuwu-Sense"
-  if make clean && make && make install; then
-    echo -e "${GREEN}Linuwu-Sense drivers compiled and installed successfully!${NC}"
-    handle_secure_boot
-    return 0
+  cd "$driver_src"
+  echo "Compiling drivers..."
+  if make clean && make all; then
+    echo -e "${GREEN}Linuwu-Sense drivers compiled successfully!${NC}"
+    
+    # Sign the module BEFORE installing if Secure Boot is on
+    handle_secure_boot "$driver_src/src/linuwu_sense.ko"
+    
+    echo "Installing drivers to system..."
+    if make install; then
+        echo -e "${GREEN}Linuwu-Sense drivers installed successfully!${NC}"
+        return 0
+    else
+        echo -e "${RED}Error: Failed to install drivers (installation step).${NC}"
+        return 1
+    fi
   else
-    echo -e "${RED}Error: Failed to install Linuwu-Sense drivers${NC}"
+    echo -e "${RED}Error: Failed to compile Linuwu-Sense drivers.${NC}"
     return 1
   fi
 }

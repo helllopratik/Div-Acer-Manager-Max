@@ -468,38 +468,96 @@ else:
 PY
 }
 
+handle_secure_boot() {
+  local module_to_sign="$1"
+  local sb_state=$(mokutil --sb-state 2>/dev/null || true)
+  if ! echo "$sb_state" | grep -iq "enabled"; then
+    echo -e "${GREEN}Secure Boot is disabled or not supported. Skipping module signing.${NC}"
+    return 0
+  fi
+
+  echo -e "${YELLOW}Secure Boot is enabled. Setting up module signing...${NC}"
+  local real_user="${SUDO_USER:-$USER}"
+  local user_home=$(getent passwd "$real_user" | cut -d: -f6 2>/dev/null)
+  [ -z "$user_home" ] && user_home="/root"
+  local keydir="$user_home/module-signing"
+
+  mkdir -p "$keydir"
+  cd "$keydir"
+
+  if [[ ! -f MOK.priv || ! -f MOK.pem ]]; then
+    echo "Creating MOK key pair..."
+    openssl req -new -x509 -newkey rsa:2048 -keyout MOK.priv -out MOK.pem -nodes -days 36500 -subj "/CN=Linuwu Sense Module Signing/" 2>/dev/null
+  fi
+  if [[ ! -f MOK.der ]]; then
+    openssl x509 -in MOK.pem -outform DER -out MOK.der 2>/dev/null
+  fi
+
+  local kdir="/lib/modules/$(uname -r)/build"
+  local signfile="$kdir/scripts/sign-file"
+
+  if [[ -x "$signfile" && -f "$module_to_sign" ]]; then
+    echo "Signing module: $module_to_sign"
+    sudo "$signfile" sha256 MOK.priv MOK.pem "$module_to_sign"
+  else
+    echo -e "${RED}Could not sign module (missing sign-file or module).${NC}"
+  fi
+
+  if ! mokutil --list-enrolled 2>/dev/null | grep -q "Linuwu Sense Module Signing"; then
+    echo -e "${RED}===========================================${NC}"
+    echo -e "${RED}             REBOOT REQUIRED               ${NC}"
+    echo -e "${YELLOW}MOK key not enrolled. Importing key...${NC}"
+    echo -e "${YELLOW}On reboot, you MUST enroll the MOK key.${NC}"
+    echo -e "${YELLOW}The driver will not work until you reboot and enroll.${NC}"
+    echo -e "${RED}===========================================${NC}"
+    sudo mokutil --import MOK.der || true
+  else
+    echo -e "${GREEN}MOK key already enrolled. Module signed successfully.${NC}"
+  fi
+}
+
 install_drivers() {
   echo -e "${YELLOW}Installing Linuwu-Sense drivers...${NC}"
 
-  if [ ! -d "Linuwu-Sense" ]; then
+  local driver_dir=""
+  if [ -d "Linuwu-Sense" ]; then
+    driver_dir="Linuwu-Sense"
+  elif [ -d "../Linuwu-Sense" ]; then
+    driver_dir="../Linuwu-Sense"
+  fi
+
+  if [ -z "$driver_dir" ]; then
     echo -e "${RED}Error: Linuwu-Sense directory not found!${NC}"
-    echo "Please make sure the script is run from the same directory containing Linuwu-Sense folder."
-    pause
     return 1
   fi
 
-  cd Linuwu-Sense
+  cd "$driver_dir"
 
   if ! install_kernel_build_dependencies; then
-    cd ..
-    pause
+    cd -
     return 1
   fi
 
-  if ! apply_linuwu_kernel_compat "."; then
-    cd ..
-    pause
-    return 1
-  fi
+  # Apply patches (robustly)
+  apply_linuwu_kernel_compat "."
 
-  if make clean && make && make install; then
-    echo -e "${GREEN}Linuwu-Sense drivers installed successfully!${NC}"
-    cd ..
-    return 0
+  echo "Compiling drivers..."
+  if make clean && make all; then
+    handle_secure_boot "src/linuwu_sense.ko"
+    
+    echo "Installing drivers to system..."
+    if make install; then
+        echo -e "${GREEN}Linuwu-Sense drivers installed successfully!${NC}"
+        cd -
+        return 0
+    else
+        echo -e "${RED}Error: Failed to install Linuwu-Sense drivers (installation step).${NC}"
+        cd -
+        return 1
+    fi
   else
-    echo -e "${RED}Error: Failed to install Linuwu-Sense drivers${NC}"
-    cd ..
-    pause
+    echo -e "${RED}Error: Failed to compile Linuwu-Sense drivers.${NC}"
+    cd -
     return 1
   fi
 }
