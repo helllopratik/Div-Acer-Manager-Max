@@ -11,7 +11,7 @@
 > [!CAUTION]
 > Project is under passive development.
 
-![Title Image](https://github.com/user-attachments/assets/a60898a6-a2b8-432e-b5a2-8d0a45c63484)
+![AI Generated Art Banner](https://image.pollinations.ai/prompt/Futuristic%20Acer%20Nitro%20Predator%20Laptop%20Software%20Manager%20Interface%20Cyberpunk%20Neon%20Vector%20Art%20Linux%20Tux?width=800&height=300&nologo=true)
 
 <h4 align="center">
 ⭐ Please star this repository to show support. It motivates me to make the project better for everyone
@@ -20,6 +20,12 @@
 ## ✨ Features
 
 ### ✅ Fully Implemented
+
+* 📦 **Automated DEB Packaging**
+  Installs cleanly and seamlessly via `.deb` packages.
+
+* 🔐 **Secure Boot Support**
+  Automatically handles MOK enrollment and driver signing during installation!
 
 * 🔋 **Performance / Thermal Profiles**
   Eco, Silent, Balanced, Performance, Turbo — automatically adjusted based on AC/battery status
@@ -66,7 +72,9 @@ Check your device's compatibility here: [Compatibility List](https://github.com/
 
 You can install DAMX using either of the following methods:
 
-### 🔗 Remote Installation
+### 🔗 Remote Installation (Recommended DEB Install)
+
+The remote setup script automatically downloads the latest `.deb` release, installs it natively, and then builds the kernel drivers (including signing them for **Secure Boot**).
 
 1. Open a terminal window.
 
@@ -76,7 +84,7 @@ You can install DAMX using either of the following methods:
    curl -fsSL https://raw.githubusercontent.com/PXDiv/Div-Acer-Manager-Max/refs/heads/main/scripts/remoteSetup.sh -o /tmp/setup.sh && sudo bash /tmp/setup.sh
    ```
 
-3. Follow the on-screen prompts.
+3. Follow the on-screen prompts. *(If Secure Boot is enabled, the script will guide you to enroll a MOK key upon reboot).*
 
 4. Done!
 
@@ -84,33 +92,19 @@ You can install DAMX using either of the following methods:
 
 If the remote installation fails for some reason or you've gone offline, follow these steps:
 
-1. Download the latest release from the **Releases** section.
+1. Download the latest `.deb` release from the **Releases** section.
 
-2. Extract the downloaded package.
-
-3. Make the `setup.sh` script executable:
+2. Install the package via APT or dpkg:
 
    ```bash
-   chmod +x setup.sh
+   sudo apt install ./damx_*.deb
    ```
 
-4. Run the script:
+3. Extract the downloaded `DAMX-*.tar.xz` package (if you need to manually build the drivers).
 
-   * Right-click the setup file and choose **“Run in Terminal”**,
-     or open a terminal in the folder and run:
+4. Make the `setup.sh` script executable and run it to install the drivers.
 
-     ```bash
-     ./setup.sh
-     ```
-
-5. When prompted, choose an option from the menu:
-
-   * `1` → Install
-   * `2` → Install without Drivers
-   * `3` → Uninstall
-   * `4` → Reinstall/Update
-
-6. Reboot your system after the installation completes.
+5. Reboot your system after the installation completes.
 
 ✅ That’s it—you’re all set!
 
