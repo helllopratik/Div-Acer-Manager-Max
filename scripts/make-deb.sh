@@ -64,7 +64,17 @@ chmod 755 "${DEBIAN_DIR}/prerm"
 GUI_BIN_DIR=$1
 DAEMON_BIN_DIR=$2
 
-echo "Packaging components..."
+# Packaging components...
+mkdir -p "${PACKAGE_DIR}/opt/damx/src"
+
+if [ -d "Linuwu-Sense" ]; then
+    echo "Including Linuwu-Sense source..."
+    cp -r Linuwu-Sense "${PACKAGE_DIR}/opt/damx/src/"
+    # Remove build artifacts from the source copy
+    find "${PACKAGE_DIR}/opt/damx/src/Linuwu-Sense" -name "*.o" -delete || true
+    find "${PACKAGE_DIR}/opt/damx/src/Linuwu-Sense" -name "*.ko" -delete || true
+    find "${PACKAGE_DIR}/opt/damx/src/Linuwu-Sense" -name ".*.cmd" -delete || true
+fi
 
 if [ -n "$GUI_BIN_DIR" ] && [ -d "$GUI_BIN_DIR" ]; then
     echo "Using GUI binaries from ${GUI_BIN_DIR}"
