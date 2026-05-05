@@ -61,24 +61,49 @@ EOL
 chmod 755 "${DEBIAN_DIR}/prerm"
 
 # Build components if possible (simulated here or skipped if binaries exist)
-# In a real CI, you would run dotnet publish and pyinstaller here.
+GUI_BIN_DIR=$1
+DAEMON_BIN_DIR=$2
 
-echo "Warning: This script currently packages existing binaries if found."
-echo "Building components..."
+echo "Packaging components..."
 
-# Check if binaries exist in Publish/ (created by PackageEverything.py)
-if [ -d "Publish/DAMX-${PACKAGE_VERSION}" ]; then
-    echo "Found published binaries in Publish/DAMX-${PACKAGE_VERSION}. Packaging them..."
-    cp -r "Publish/DAMX-${PACKAGE_VERSION}/DAMX-Daemon/"* "${PACKAGE_DIR}/usr/lib/damx/"
-    cp -r "Publish/DAMX-${PACKAGE_VERSION}/DAMX-GUI/"* "${PACKAGE_DIR}/usr/lib/damx/"
-    # Desktop file
-    cp "Publish/DAMX-${PACKAGE_VERSION}/damx.desktop" "${PACKAGE_DIR}/usr/share/applications/" || true
-    # Icon
-    cp "Publish/DAMX-${PACKAGE_VERSION}/DAMX-GUI/icon.png" "${PACKAGE_DIR}/usr/share/icons/hicolor/256x256/apps/damx.png" || true
+if [ -n "$GUI_BIN_DIR" ] && [ -d "$GUI_BIN_DIR" ]; then
+    echo "Using GUI binaries from ${GUI_BIN_DIR}"
+    cp -r "${GUI_BIN_DIR}/"* "${PACKAGE_DIR}/usr/lib/damx/"
 else
-    echo "No published binaries found. Please run scripts/PackageEverything.py first."
-    # For now, let's just create a dummy structure to show it works
-    touch "${PACKAGE_DIR}/usr/lib/damx/placeholder"
+    # Fallback to local search
+    if [ -d "Publish/DAMX-${PACKAGE_VERSION}/DAMX-GUI" ]; then
+        cp -r "Publish/DAMX-${PACKAGE_VERSION}/DAMX-GUI/"* "${PACKAGE_DIR}/usr/lib/damx/"
+    fi
+fi
+
+if [ -n "$DAEMON_BIN_DIR" ] && [ -d "$DAEMON_BIN_DIR" ]; then
+    echo "Using Daemon binaries from ${DAEMON_BIN_DIR}"
+    cp -r "${DAEMON_BIN_DIR}/"* "${PACKAGE_DIR}/usr/lib/damx/"
+else
+    # Fallback to local search
+    if [ -d "Publish/DAMX-${PACKAGE_VERSION}/DAMX-Daemon" ]; then
+        cp -r "Publish/DAMX-${PACKAGE_VERSION}/DAMX-Daemon/"* "${PACKAGE_DIR}/usr/lib/damx/"
+    fi
+fi
+
+# Ensure icons and desktop files are in the right place
+if [ -f "${PACKAGE_DIR}/usr/lib/damx/icon.png" ]; then
+    cp "${PACKAGE_DIR}/usr/lib/damx/icon.png" "${PACKAGE_DIR}/usr/share/icons/hicolor/256x256/apps/damx.png"
+fi
+
+# Create desktop entry if missing
+if [ ! -f "${PACKAGE_DIR}/usr/share/applications/damx.desktop" ]; then
+    cat > "${PACKAGE_DIR}/usr/share/applications/damx.desktop" << EOL
+[Desktop Entry]
+Name=DAMX
+Comment=Div Acer Manager Max
+Exec=/usr/bin/damx
+Icon=damx
+Terminal=false
+Type=Application
+Categories=Utility;System;
+Keywords=acer;laptop;system;
+EOL
 fi
 
 # Create a wrapper script in /usr/bin

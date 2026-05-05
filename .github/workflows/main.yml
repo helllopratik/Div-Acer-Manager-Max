@@ -106,34 +106,17 @@ jobs:
             xz -9e --threads=0 DivAcerManagerMax.pdb.tar
           fi
 
-      - name: Upload DAMX archive
+      - name: Package .deb file
+        run: |
+          chmod +x scripts/make-deb.sh
+          # Pass the publish directory and DaemonPublish directory to the script
+          ./scripts/make-deb.sh ./publish ./DaemonPublish
+
+      - name: Upload DAMX .deb
         uses: actions/upload-artifact@v4
         with:
-          name: DAMX-archive
-          path: DAMX-${{ github.event.inputs.tag }}.tar.xz
-
-      - name: Upload PDB archive (if present)
-        if: ${{ hashFiles('DivAcerManagerMax.pdb.tar.xz') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: DivAcerManagerMax-pdb
-          path: DivAcerManagerMax.pdb.tar.xz
-
-  release:
-    needs: build
-    if: ${{ github.event.inputs.publish_release == 'true' }} 
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download DAMX archive
-        uses: actions/download-artifact@v4
-        with:
-          name: DAMX-archive
-
-      - name: Download PDB archive
-        if: always()
-        uses: actions/download-artifact@v4
-        with:
-          name: DivAcerManagerMax-pdb
+          name: DAMX-deb
+          path: "*.deb"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -144,6 +127,7 @@ jobs:
           files: |
             DAMX-${{ github.event.inputs.tag }}.tar.xz
             DivAcerManagerMax.pdb.tar.xz
+            *.deb
           token: ${{ secrets.GH_PAT_RELEASE }}
 
 
