@@ -9,7 +9,7 @@
 ![Hardware Manager](https://image.pollinations.ai/prompt/Acer%20Predator%20Nitro%20Gaming%20Laptop%20HUD%20Display%20Linux%20Tux%20Mascot%20Cyberpunk%20Circuitry%20Neon%20Blue%20and%20Red%20High%20Detail%208k?width=1000&height=400&nologo=true)
 
 ## 🚀 Modern Kernel Support (6.1 - 6.17+)
-This fork features a **hard-patched Linuwu-Sense driver (v25.701)** with advanced compatibility layers:
+This fork features a **hard-patched Linuwu-Sense driver (v25.701-Unified)** with advanced compatibility layers:
 *   **WMI Bus API Bridge**: Works on Kernel 6.12+ where legacy WMI handlers were removed.
 *   **Platform Profile 2.0**: Compatible with Kernel 6.14+ API changes.
 *   **Backward Compatibility**: Fixed support for older kernels (e.g., 6.1) by resolving backlight constant issues.

@@ -1019,7 +1019,6 @@ static struct device *damx_devm_platform_profile_register(struct device *dev,
 
     acer_platform_profile_handler.profile_get = acer_platform_profile_get_compat;
     acer_platform_profile_handler.profile_set = acer_platform_profile_set_compat;
-    acer_platform_profile_handler.name = name;
 
     err = platform_profile_register(&acer_platform_profile_handler);
     if (err)

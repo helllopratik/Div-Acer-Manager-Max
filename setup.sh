@@ -24,7 +24,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Detect Version
-VERSION=$(grep -oP 'private readonly string ProjectVersion\s*=\s*"\K[\d.]+' DivAcerManagerMax/MainWindow.axaml.cs || echo "1.0.0")
+VERSION=$(grep -oP 'private readonly string ProjectVersion\s*=\s*"\K[^"]+' DivAcerManagerMax/MainWindow.axaml.cs || echo "1.0.0")
 echo -e "${GREEN}Detected Version: ${VERSION}${NC}"
 
 # 1. Install Dependencies
@@ -95,6 +95,26 @@ Description: Div Acer Manager Max (DAMX)
  Built locally from source. Modern Acer laptop management suite.
 EOL
 
+# Create systemd service file
+mkdir -p "$BUILD_DIR/etc/systemd/system"
+cat > "$BUILD_DIR/etc/systemd/system/damx-daemon.service" << EOL
+[Unit]
+Description=DAMX Daemon for Acer laptops
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/damx/DAMX-Daemon
+Restart=on-failure
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
 # Post-install script (Install driver)
 cat > "$BUILD_DIR/DEBIAN/postinst" << EOL
 #!/bin/bash
@@ -109,6 +129,17 @@ systemctl start damx-daemon.service || true
 exit 0
 EOL
 chmod 755 "$BUILD_DIR/DEBIAN/postinst"
+
+# Pre-remove script
+cat > "$BUILD_DIR/DEBIAN/prerm" << EOL
+#!/bin/bash
+set -e
+echo "Stopping DAMX services..."
+systemctl stop damx-daemon.service || true
+systemctl disable damx-daemon.service || true
+exit 0
+EOL
+chmod 755 "$BUILD_DIR/DEBIAN/prerm"
 
 # Wrapper script
 cat > "$BUILD_DIR/usr/bin/damx" << EOL
