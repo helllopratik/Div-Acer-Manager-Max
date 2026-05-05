@@ -942,7 +942,7 @@ static const struct dmi_system_id non_acer_quirks[] __initconst = {
  * WMI: Linux 6.12+ removed legacy wmi_install_notify_handler.
  */
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= 61200
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 #include <linux/wmi.h>
 static void acer_wmi_notify(union acpi_object *obj, void *context);
 static void damx_wmi_notify(struct wmi_device *wdev, union acpi_object *data) {
@@ -1007,7 +1007,8 @@ static struct device *damx_devm_platform_profile_register(struct device *dev,
 {
     int err;
 
-    memset(&acer_platform_profile_handler, 0, sizeof(acer_platform_profile_handler));
+    /* Use a static handler but ensure its choices are cleared before probe */
+    bitmap_zero(acer_platform_profile_handler.choices, PLATFORM_PROFILE_LAST);
     acer_platform_profile_ops_compat = ops;
 
     if (ops && ops->probe) {
@@ -1018,6 +1019,7 @@ static struct device *damx_devm_platform_profile_register(struct device *dev,
 
     acer_platform_profile_handler.profile_get = acer_platform_profile_get_compat;
     acer_platform_profile_handler.profile_set = acer_platform_profile_set_compat;
+    acer_platform_profile_handler.name = name;
 
     err = platform_profile_register(&acer_platform_profile_handler);
     if (err)
